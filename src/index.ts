@@ -1,4 +1,4 @@
-import { Signer, PublicKey, Transaction, Commitment, ConfirmOptions } from "@solana/web3.js";
+import { SystemProgram, Signer, PublicKey, Keypair, Transaction, Commitment, ConfirmOptions } from "@solana/web3.js";
 
 import * as token from "@solana/spl-token";
 import { BanksClient, BanksTransactionMeta, ProgramTestContext } from "solana-bankrun";
@@ -9,13 +9,13 @@ export async function createMint(
   mintAuthority: PublicKey,
   freezeAuthority: PublicKey | null,
   decimals: number,
-  keypair = anchor.web3.Keypair.generate(),
+  keypair = Keypair.generate(),
   programId = token.TOKEN_PROGRAM_ID
 ): PublicKey {
   let rent = await banksClient.getRent();
 
-  const tx = new anchor.web3.Transaction().add(
-    anchor.web3.SystemProgram.createAccount({
+  const tx = new Transaction().add(
+    SystemProgram.createAccount({
       fromPubkey: payer.publicKey,
       newAccountPubkey: keypair.publicKey,
       space: token.MINT_SIZE,
