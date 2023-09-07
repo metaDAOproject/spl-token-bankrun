@@ -2,7 +2,7 @@
   "name": "spl-token-bankrun",
   "version": "0.2.0",
   "description": "",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -15,5 +15,12 @@
   "bugs": {
     "url": "https://github.com/metaDAOproject/spl-token-bankrun/issues"
   },
-  "homepage": "https://github.com/metaDAOproject/spl-token-bankrun#readme"
+  "homepage": "https://github.com/metaDAOproject/spl-token-bankrun#readme",
+  "dependencies": {
+    "@solana/spl-token": "^0.3.8",
+    "solana-bankrun": "^0.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  }
 }
