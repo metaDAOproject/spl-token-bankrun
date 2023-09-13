@@ -1,4 +1,4 @@
-import { SystemProgram, Signer, PublicKey, Keypair, Transaction, Commitment, ConfirmOptions } from "@solana/web3.js";
+import { SystemProgram, Signer, PublicKey, Keypair, Transaction, Commitment, ConfirmOptions, AccountInfo } from "@solana/web3.js";
 
 import * as token from "@solana/spl-token";
 import { BanksClient, BanksTransactionMeta, ProgramTestContext } from "solana-bankrun";
@@ -11,7 +11,7 @@ export async function createMint(
   decimals: number,
   keypair = Keypair.generate(),
   programId = token.TOKEN_PROGRAM_ID
-): PublicKey {
+): Promise<PublicKey> {
   let rent = await banksClient.getRent();
 
   const tx = new Transaction().add(
@@ -30,7 +30,7 @@ export async function createMint(
       programId
     )
   );
-  [tx.recentBlockhash] = await banksClient.getLatestBlockhash();
+  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
   tx.sign(payer, keypair);
 
   await banksClient.processTransaction(tx);
@@ -82,7 +82,7 @@ export async function createAccount(
       programId
     )
   );
-  [tx.recentBlockhash] = await banksClient.getLatestBlockhash();
+  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
   tx.sign(payer, keypair);
 
   await banksClient.processTransaction(tx);
@@ -117,7 +117,7 @@ export async function createAssociatedTokenAccount(
     )
   );
 
-  [tx.recentBlockhash] = await banksClient.getLatestBlockhash();
+  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
   tx.sign(payer);
 
   await banksClient.processTransaction(tx);
@@ -130,9 +130,9 @@ export async function getMint(
   address: PublicKey,
   commitment?: Commitment,
   programId = token.TOKEN_PROGRAM_ID
-): Promise<Mint> {
-  const info = await banksClient.getAccountInfo(address, commitment);
-  return token.unpackMint(address, info, programId);
+): Promise<token.Mint> {
+  const info = await banksClient.getAccount(address, commitment);
+  return token.unpackMint(address, info as AccountInfo<Buffer>, programId);
 }
 
 // `mintTo` without the mintAuthority signer
@@ -168,7 +168,7 @@ export async function mintToOverride(
   await context.setAccount(destination, {
     data: accData,
     executable: false,
-    lamports: 1_000_000_000n,
+    lamports: 1_000_000_000,
     owner: token.TOKEN_PROGRAM_ID,
   });
 }
@@ -195,7 +195,7 @@ export async function mintTo(
       programId
     )
   );
-  [tx.recentBlockhash] = await banksClient.getLatestBlockhash();
+  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
   tx.sign(payer, ...signers);
 
   return await banksClient.processTransaction(tx);
@@ -215,7 +215,7 @@ export async function getAccount(
   address: PublicKey,
   commitment?: Commitment,
   programId = token.TOKEN_PROGRAM_ID
-): Promise<Account> {
+): Promise<token.Account> {
   const info = await banksClient.getAccount(address, commitment);
-  return token.unpackAccount(address, info, programId);
+  return token.unpackAccount(address, info as AccountInfo<Buffer>, programId);
 }
