@@ -101,7 +101,7 @@ export async function createAssociatedTokenAccount(
   const associatedToken = token.getAssociatedTokenAddressSync(
     mint,
     owner,
-    false,
+    true,
     programId,
     associatedTokenProgramId
   );
