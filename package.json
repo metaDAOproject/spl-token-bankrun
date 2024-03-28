@@ -1,6 +1,6 @@
 {
   "name": "spl-token-bankrun",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,7 +20,7 @@
   "homepage": "https://github.com/metaDAOproject/spl-token-bankrun#readme",
   "dependencies": {
     "@solana/spl-token": "^0.3.8",
-    "solana-bankrun": "^0.2.0"
+    "solana-bankrun": "^0.3.0"
   },
   "devDependencies": {
     "typescript": "^5.2.2"
