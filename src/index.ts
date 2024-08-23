@@ -201,6 +201,34 @@ export async function mintTo(
   return await banksClient.processTransaction(tx);
 }
 
+export async function transfer(
+  banksClient: BanksClient,
+  payer: Signer,
+  source: PublicKey,
+  destination: PublicKey,
+  owner: PublicKey | Signer,
+  amount: number | bigint,
+  multiSigners: Signer[] = [],
+  programId = token.TOKEN_PROGRAM_ID
+): Promise<BanksTransactionMeta> {
+  const [ownerPublicKey, signers] = getSigners(owner, multiSigners);
+
+  const tx = new Transaction().add(
+    token.createTransferInstruction(
+      source,
+      destination,
+      ownerPublicKey,
+      amount,
+      multiSigners,
+      programId
+    )
+  );
+  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
+  tx.sign(payer, ...signers);
+
+  return await banksClient.processTransaction(tx);
+}
+
 export function getSigners(
   signerOrMultisig: Signer | PublicKey,
   multiSigners: Signer[]
