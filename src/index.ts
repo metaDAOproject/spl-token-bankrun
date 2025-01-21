@@ -1,25 +1,36 @@
-import { SystemProgram, Signer, PublicKey, Keypair, Transaction, Commitment, ConfirmOptions, AccountInfo } from "@solana/web3.js";
+import { SystemProgram, Signer, PublicKey, Keypair, Transaction, Commitment, ConfirmOptions, AccountInfo, SendTransactionError } from "@solana/web3.js";
 
 import * as token from "@solana/spl-token";
-import { BanksClient, BanksTransactionMeta, ProgramTestContext } from "solana-bankrun";
+import { FailedTransactionMetadata, LiteSVM, TransactionMetadata } from "litesvm";
 
-export async function createMint(
-  banksClient: BanksClient,
+function handleFailedTx(res: FailedTransactionMetadata | TransactionMetadata, signature: Buffer) {
+  if (res instanceof FailedTransactionMetadata) {
+    throw new SendTransactionError({
+      action: "send",
+      signature: signature.toString(),
+      transactionMessage: res.err().toString(),
+      logs: res.meta().logs()
+    });
+  }
+}
+
+export function createMint(
+  client: LiteSVM,
   payer: Keypair,
   mintAuthority: PublicKey,
   freezeAuthority: PublicKey | null,
   decimals: number,
   keypair = Keypair.generate(),
   programId = token.TOKEN_PROGRAM_ID
-): Promise<PublicKey> {
-  let rent = await banksClient.getRent();
+): PublicKey {
+  let rent = client.getRent();
 
   const tx = new Transaction().add(
     SystemProgram.createAccount({
       fromPubkey: payer.publicKey,
       newAccountPubkey: keypair.publicKey,
       space: token.MINT_SIZE,
-      lamports: Number(await rent.minimumBalance(BigInt(token.MINT_SIZE))),
+      lamports: Number(rent.minimumBalance(BigInt(token.MINT_SIZE))),
       programId: token.TOKEN_PROGRAM_ID,
     }),
     token.createInitializeMint2Instruction(
@@ -30,28 +41,28 @@ export async function createMint(
       programId
     )
   );
-  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
+  [tx.recentBlockhash] = (client.latestBlockhash())!;
   tx.sign(payer, keypair);
 
-  await banksClient.processTransaction(tx);
-
+  const res = client.sendTransaction(tx);
+  handleFailedTx(res, tx.signature!);
   return keypair.publicKey;
 }
 
-export async function createAccount(
-  banksClient: BanksClient,
+export function createAccount(
+  client: LiteSVM,
   payer: Signer,
   mint: PublicKey,
   owner: PublicKey,
   keypair?: Keypair,
   confirmOptions?: ConfirmOptions,
   programId = token.TOKEN_PROGRAM_ID
-): Promise<PublicKey> {
-  let rent = await banksClient.getRent();
+): PublicKey {
+  let rent = client.getRent();
   // If a keypair isn't provided, create the associated token account and return its address
   if (!keypair)
-    return await createAssociatedTokenAccount(
-      banksClient,
+    return createAssociatedTokenAccount(
+      client,
       payer,
       mint,
       owner,
@@ -59,8 +70,8 @@ export async function createAccount(
     );
 
   // Otherwise, create the account with the provided keypair and return its public key
-  const mintState = await getMint(
-    banksClient,
+  const mintState = getMint(
+    client,
     mint,
     confirmOptions?.commitment,
     programId
@@ -72,7 +83,7 @@ export async function createAccount(
       fromPubkey: payer.publicKey,
       newAccountPubkey: keypair.publicKey,
       space,
-      lamports: Number(await rent.minimumBalance(BigInt(space))),
+      lamports: Number(rent.minimumBalance(BigInt(space))),
       programId,
     }),
     token.createInitializeAccountInstruction(
@@ -82,22 +93,21 @@ export async function createAccount(
       programId
     )
   );
-  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
+  [tx.recentBlockhash] = (client.latestBlockhash())!;
   tx.sign(payer, keypair);
-
-  await banksClient.processTransaction(tx);
-
+  const res = client.sendTransaction(tx);
+  handleFailedTx(res, tx.signature!);
   return keypair.publicKey;
 }
 
-export async function createAssociatedTokenAccount(
-  banksClient: BanksClient,
+export function createAssociatedTokenAccount(
+  client: LiteSVM,
   payer: Signer,
   mint: PublicKey,
   owner: PublicKey,
   programId = token.TOKEN_PROGRAM_ID,
   associatedTokenProgramId = token.ASSOCIATED_TOKEN_PROGRAM_ID
-): Promise<PublicKey> {
+): PublicKey {
   const associatedToken = token.getAssociatedTokenAddressSync(
     mint,
     owner,
@@ -117,34 +127,32 @@ export async function createAssociatedTokenAccount(
     )
   );
 
-  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
+  [tx.recentBlockhash] = (client.latestBlockhash())!;
   tx.sign(payer);
 
-  await banksClient.processTransaction(tx);
-
+  const res = client.sendTransaction(tx);
+  handleFailedTx(res, tx.signature!);
   return associatedToken;
 }
 
-export async function getMint(
-  banksClient: BanksClient,
+export function getMint(
+  client: LiteSVM,
   address: PublicKey,
   commitment?: Commitment,
   programId = token.TOKEN_PROGRAM_ID
-): Promise<token.Mint> {
-  const info = await banksClient.getAccount(address, commitment);
+): token.Mint {
+  const info = client.getAccount(address);
   return token.unpackMint(address, info as AccountInfo<Buffer>, programId);
 }
 
 // `mintTo` without the mintAuthority signer
 // uses bankrun's special `setAccount` function
-export async function mintToOverride(
-  context: ProgramTestContext,
+export function mintToOverride(
+  client: LiteSVM,
   destination: PublicKey,
   amount: bigint,
 ) {
-  const banksClient = context.banksClient;
-
-  const existingAccount = await getAccount(banksClient, destination);
+  const existingAccount = getAccount(client, destination);
   const { mint, owner } = existingAccount;
 
   const accData = Buffer.alloc(token.ACCOUNT_SIZE);
@@ -165,7 +173,7 @@ export async function mintToOverride(
     accData
   );
 
-  await context.setAccount(destination, {
+  client.setAccount(destination, {
     data: accData,
     executable: false,
     lamports: 1_000_000_000,
@@ -173,8 +181,8 @@ export async function mintToOverride(
   });
 }
 
-export async function mintTo(
-  banksClient: BanksClient,
+export function mintTo(
+  client: LiteSVM,
   payer: Signer,
   mint: PublicKey,
   destination: PublicKey,
@@ -182,7 +190,7 @@ export async function mintTo(
   amount: number | bigint,
   multiSigners: Signer[] = [],
   programId = token.TOKEN_PROGRAM_ID
-): Promise<BanksTransactionMeta> {
+): TransactionMetadata | FailedTransactionMetadata {
   const [authorityPublicKey, signers] = getSigners(authority, multiSigners);
 
   const tx = new Transaction().add(
@@ -195,14 +203,14 @@ export async function mintTo(
       programId
     )
   );
-  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
+  [tx.recentBlockhash] = (client.latestBlockhash())!;
   tx.sign(payer, ...signers);
 
-  return await banksClient.processTransaction(tx);
+  return client.sendTransaction(tx);
 }
 
-export async function transfer(
-  banksClient: BanksClient,
+export function transfer(
+  client: LiteSVM,
   payer: Signer,
   source: PublicKey,
   destination: PublicKey,
@@ -210,7 +218,7 @@ export async function transfer(
   amount: number | bigint,
   multiSigners: Signer[] = [],
   programId = token.TOKEN_PROGRAM_ID
-): Promise<BanksTransactionMeta> {
+): TransactionMetadata | FailedTransactionMetadata {
   const [ownerPublicKey, signers] = getSigners(owner, multiSigners);
 
   const tx = new Transaction().add(
@@ -223,10 +231,10 @@ export async function transfer(
       programId
     )
   );
-  [tx.recentBlockhash] = (await banksClient.getLatestBlockhash())!;
+  [tx.recentBlockhash] = (client.latestBlockhash())!;
   tx.sign(payer, ...signers);
 
-  return await banksClient.processTransaction(tx);
+  return client.sendTransaction(tx);
 }
 
 export function getSigners(
@@ -238,12 +246,11 @@ export function getSigners(
     : [signerOrMultisig.publicKey, [signerOrMultisig]];
 }
 
-export async function getAccount(
-  banksClient: BanksClient,
+export function getAccount(
+  client: LiteSVM,
   address: PublicKey,
-  commitment?: Commitment,
   programId = token.TOKEN_PROGRAM_ID
-): Promise<token.Account> {
-  const info = await banksClient.getAccount(address, commitment);
+): token.Account {
+  const info = client.getAccount(address);
   return token.unpackAccount(address, info as AccountInfo<Buffer>, programId);
 }
