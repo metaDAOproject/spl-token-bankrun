@@ -54,7 +54,7 @@ describe("autocrat_v0", async function () {
     it("token stuff", async function () {
       const authority = anchor.web3.Keypair.generate();
 
-      const mint = await createMint(banksClient, payer, authority.publicKey, authority.piblicKey, 9);
+      const mint = await createMint(banksClient, payer, authority.publicKey, authority.publicKey, 9);
 
       const acc = await createAccount(
 	banksClient,
